@@ -118,21 +118,21 @@ Either way: post *"Need a google form for DAIS event"* → the form is renamed a
 
    **WA1 → `TWILIO_CONTENT_SID_WA1`**
    ```
-   Hi {{1}}, it was lovely meeting you at {{2}}!
+   Hi {{Parent_Name}}, it was lovely meeting you at {{Event_Name}}!
    At CreatED, we work with students in Grades 8–12 to turn their interests into ambitious projects, research papers and competition-ready work.
-   If you'd like to explore what could make sense specifically for {{3}}, you can book a consultation with our team here:
-   Book a Consultation: {{4}}
+   If you'd like to explore what could make sense specifically for {{Student_Name}}, you can book a consultation with our team here:
+   Book a Consultation: https://www.create-ed.in/schedule-a-consultation
    – Team CreatED
    ```
    **WA2 → `TWILIO_CONTENT_SID_WA2`**
    ```
-   Hi {{1}}, just following up after {{2}}.
+   Hi {{Parent_Name}}, just following up after {{Event_Name}}.
    At CreatED, students don't start with a predetermined project. We look at their interests, academic direction and previous experiences, and then help them identify something genuinely worth building or researching.
-   If you'd like us to explore potential directions for {{3}}, you can book an initial consultation here:
-   Book a Consultation: {{4}}
+   If you'd like us to explore potential directions for {{Student_Name}}, you can book an initial consultation here:
+   Book a Consultation: https://www.create-ed.in/schedule-a-consultation
    – Team CreatED
    ```
-   Variable order is `{{1}}=Parent name, {{2}}=Event, {{3}}=Student, {{4}}=Consultation URL` (see `src/templates/whatsapp.js`).
+   Variables are **named**: `Parent_Name`, `Event_Name`, `Student_Name` — declared in `VAR` at the top of `src/templates/whatsapp.js`. The keys sent in `ContentVariables` must match the template's variable names exactly (alphanumeric, no spaces, 16 chars max). Any template variable we don't send falls back to the **template's default placeholder text**, so a delivered message showing literal `{{Parent_Name}}` filler means the keys didn't match — not that the data was missing. The consultation link is hard-coded in the template rather than passed as a variable; if you make it a variable instead, add it to `VAR` and to both builders.
 4. Optional: set the Twilio inbound webhook to `https://<PUBLIC_BASE_URL>/twilio/inbound` for opt-out handling.
 
 > In the WhatsApp **sandbox** free-form text is allowed, so the flow works for testing even before templates are approved. In production without a valid Content SID the send falls back to free-form and will only deliver inside a 24h session window.

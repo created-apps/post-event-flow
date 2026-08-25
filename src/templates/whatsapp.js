@@ -12,11 +12,23 @@ import config from '../config.js';
  *   2) a fallback body used only for the WhatsApp sandbox / local dry-runs,
  *      where free-form text is allowed.
  *
- * The `{{1}}`, `{{2}}` in the template correspond to the ordered variables the
- * approved template expects. We map them here so both stay in sync.
+ * Variable keys must match the names used in the approved Content template
+ * EXACTLY. Twilio allows numeric ({{1}}) or alphanumeric ({{Parent_Name}})
+ * keys — no spaces, 16 characters max — and any template variable missing from
+ * contentVariables falls back to the template's default placeholder text. That
+ * is what a message full of literal "{{Parent_Name}}" style filler means: the
+ * keys we sent did not match the ones the template declares.
  */
 
 const CTA = () => config.content.consultationUrl;
+
+// Variable names as declared in the Twilio Content templates. Change these if
+// you rename a variable in Content Template Builder.
+const VAR = {
+  parent: 'Parent_Name',
+  event: 'Event_Name',
+  student: 'Student_Name',
+};
 
 // ── WhatsApp 1 — Immediate Follow-Up ──────────────────────────────────────
 export function whatsapp1(lead) {
@@ -36,20 +48,20 @@ ${CTA()}
 
 – Team CreatED`;
 
-  // Ordered variables for the approved Content template WA1.
-  // Template body (submit this):
-  //   Hi {{1}}, it was lovely meeting you at {{2}}!
+  // Variables for the approved Content template WA1.
+  // Template body (the consultation link is hard-coded in the template, so it
+  // is not a variable):
+  //   Hi {{Parent_Name}}, it was lovely meeting you at {{Event_Name}}!
   //   At CreatED, we work with students in Grades 8–12 to turn their interests
   //   into ambitious projects, research papers and competition-ready work.
-  //   If you'd like to explore what could make sense specifically for {{3}},
-  //   you can book a consultation with our team here:
-  //   Book a Consultation: {{4}}
+  //   If you'd like to explore what could make sense specifically for
+  //   {{Student_Name}}, you can book a consultation with our team here:
+  //   Book a Consultation: <link>
   //   – Team CreatED
   const contentVariables = {
-    1: parent,
-    2: eventName,
-    3: student,
-    4: CTA(),
+    [VAR.parent]: parent,
+    [VAR.event]: eventName,
+    [VAR.student]: student,
   };
 
   return {
@@ -76,20 +88,19 @@ ${CTA()}
 
 – Team CreatED`;
 
-  // Template body (submit this):
-  //   Hi {{1}}, just following up after {{2}}.
+  // Template body (link hard-coded in the template, as with WA1):
+  //   Hi {{Parent_Name}}, just following up after {{Event_Name}}.
   //   At CreatED, students don't start with a predetermined project. We look at
   //   their interests, academic direction and previous experiences, and then
   //   help them identify something genuinely worth building or researching.
-  //   If you'd like us to explore potential directions for {{3}}, you can book
-  //   an initial consultation here:
-  //   Book a Consultation: {{4}}
+  //   If you'd like us to explore potential directions for {{Student_Name}},
+  //   you can book an initial consultation here:
+  //   Book a Consultation: <link>
   //   – Team CreatED
   const contentVariables = {
-    1: parent,
-    2: eventName,
-    3: student,
-    4: CTA(),
+    [VAR.parent]: parent,
+    [VAR.event]: eventName,
+    [VAR.student]: student,
   };
 
   return {
