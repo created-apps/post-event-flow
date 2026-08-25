@@ -21,6 +21,35 @@ const toWhatsApp = (phone) => {
 };
 
 /**
+ * The sender half of the request. Twilio takes either a From address or a
+ * Messaging Service SID, not necessarily both — with a Messaging Service it
+ * picks the WhatsApp sender out of the service's pool, which avoids having to
+ * name (and keep in sync) a specific whatsapp: address here.
+ *
+ * Messaging Service wins when both are set.
+ */
+function sender() {
+  const { messagingServiceSid, whatsappFrom } = config.twilio;
+  if (messagingServiceSid && !messagingServiceSid.includes('<')) {
+    return { messagingServiceSid };
+  }
+  if (whatsappFrom === 'whatsapp:+14155238886') {
+    logger.warn(
+      'Using the Twilio WhatsApp sandbox sender — the recipient must have joined ' +
+        'the sandbox. Set TWILIO_MESSAGING_SERVICE_SID or TWILIO_WHATSAPP_FROM for production.'
+    );
+  }
+  // Same channel on both sides, or Twilio rejects the pair with 21910.
+  const from = toWhatsApp(whatsappFrom);
+  if (!from) {
+    throw new Error(
+      'No WhatsApp sender configured — set TWILIO_MESSAGING_SERVICE_SID or TWILIO_WHATSAPP_FROM'
+    );
+  }
+  return { from };
+}
+
+/**
  * Send a WhatsApp message.
  * @param {string} toPhone      recipient phone (parent phone)
  * @param {object} msg          from templates/whatsapp.js
@@ -33,7 +62,7 @@ export async function sendWhatsApp(toPhone, msg) {
   // Dry-run when Twilio isn't wired up yet.
   if (!client) {
     logger.info('[DRY-RUN] WhatsApp', {
-      from: toWhatsApp(config.twilio.whatsappFrom),
+      ...sender(),
       to,
       contentSid: msg.contentSid || null,
       preview: msg.body?.slice(0, 80),
@@ -41,12 +70,7 @@ export async function sendWhatsApp(toPhone, msg) {
     return { dryRun: true };
   }
 
-  // Normalise the sender too: Twilio rejects the pair with "Invalid From and To
-  // pair" (21910) if one side carries the whatsapp: prefix and the other doesn't.
-  const from = toWhatsApp(config.twilio.whatsappFrom);
-  if (!from) throw new Error('TWILIO_WHATSAPP_FROM is not set');
-
-  const params = { from, to };
+  const params = { to, ...sender() };
 
   // Prefer an approved Content template (required for business-initiated msgs).
   const hasTemplate = msg.contentSid && !msg.contentSid.includes('<');

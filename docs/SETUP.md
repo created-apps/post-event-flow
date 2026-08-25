@@ -107,7 +107,13 @@ Either way: post *"Need a google form for DAIS event"* → the form is renamed a
 ## 5. Twilio WhatsApp
 
 1. `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` from the Twilio console.
-2. Set `TWILIO_WHATSAPP_FROM` (sandbox `whatsapp:+14155238886`, or your approved sender).
+2. Set the sender — **either** works, and the Messaging Service wins when both are present:
+   - `TWILIO_MESSAGING_SERVICE_SID` (Messaging → Services) with your WhatsApp sender in its pool. No `From` is sent; Twilio picks the sender from the pool, so there is no `whatsapp:` address to keep in sync.
+   - `TWILIO_WHATSAPP_FROM` — a specific sender, E.164 with the `whatsapp:` prefix (sandbox `whatsapp:+14155238886`, or your approved sender).
+
+   Two errors you will hit if this is wrong:
+   - **21910 `Invalid From and To pair`** — one side has the `whatsapp:` prefix and the other doesn't. The code normalises both sides now, so this should not recur.
+   - **63007 `Twilio could not find a Channel with the specified From address`** — the number is not a registered WhatsApp sender on this account, or its status is not `ONLINE`. Register the sender, use a Messaging Service that owns it, or fall back to the sandbox number (and join the sandbox from the receiving phone).
 3. **Business-initiated messages require approved Content templates.** Submit these bodies for approval and paste the resulting SIDs:
 
    **WA1 → `TWILIO_CONTENT_SID_WA1`**

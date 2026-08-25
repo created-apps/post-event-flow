@@ -31,6 +31,10 @@ const delayMinutes = (minutesEnv, hoursEnv, dfltMinutes) => {
   return pick(minutesEnv, 1) ?? pick(hoursEnv, 60) ?? dfltMinutes;
 };
 
+// Twilio's shared WhatsApp sandbox sender — works on any account once the
+// receiving phone has joined the sandbox. Not for production.
+const SANDBOX_WHATSAPP_FROM = 'whatsapp:+14155238886';
+
 // Channel IDs look like "C0XXXXXXX"; treat blanks and <placeholders> as unset.
 const channelId = (v) => {
   const s = String(v ?? '').trim();
@@ -88,7 +92,15 @@ const config = {
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || '',
+    // Defaults to the WhatsApp sandbox sender, so ACCOUNT_SID + AUTH_TOKEN are
+    // the only two Twilio variables you must set to start sending. Twilio
+    // itself always needs a sender (From or MessagingServiceSid) — this just
+    // supplies one rather than making you configure it.
+    whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || SANDBOX_WHATSAPP_FROM,
+    // Alternative sender: a Messaging Service with the WhatsApp sender in its
+    // pool. Takes precedence over whatsappFrom — Twilio accepts one or the
+    // other, and picks the sender from the pool when From is omitted.
+    messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID || '',
     contentSidWa1: process.env.TWILIO_CONTENT_SID_WA1 || '',
     contentSidWa2: process.env.TWILIO_CONTENT_SID_WA2 || '',
   },
@@ -136,7 +148,8 @@ config.ready = {
   twilio:
     isReal(config.twilio.accountSid) &&
     isReal(config.twilio.authToken) &&
-    isReal(config.twilio.whatsappFrom),
+    (isReal(config.twilio.whatsappFrom) ||
+      isReal(config.twilio.messagingServiceSid)),
   sendgrid: isReal(config.sendgrid.apiKey) && isReal(config.sendgrid.from),
   ingest: isReal(config.ingestToken),
   supabase: isReal(config.supabase.url) && isReal(config.supabase.serviceRoleKey),
