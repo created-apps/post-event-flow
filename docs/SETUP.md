@@ -6,11 +6,13 @@ Fill in `.env` (copied from `.env.example`) as you complete each section. The ap
 
 ## 0. Deploy the backend
 
-Any Node host works (Render, Railway, Fly, a VM). It needs a public HTTPS URL because Slack, Google Apps Script and Twilio all call into it.
+Any Node host works (Render, Railway, Fly, a VM). It needs a public HTTPS URL because Slack, Google Apps Script and Twilio all call into it — Apps Script runs on Google's servers, so `http://localhost:3000` is not reachable from it.
 
-- Node ≥ 20, `npm install`, `npm start`.
+- **Node ≥ 22**, `npm install`, `npm start`. Not optional: `@supabase/supabase-js` uses the native `WebSocket` global and throws at import time on Node 20 (`native WebSocket not found`). Pinned in `.nvmrc` and `package.json` → `engines`.
 - Set `PUBLIC_BASE_URL` to the public URL.
 - Generate a long random `INGEST_TOKEN` (Apps Script will send it).
+
+**Railway:** [`railway.toml`](../railway.toml) is checked in — nixpacks build, `npm start`, health check on `/health`, restart on failure, and `numReplicas = 1` (the task scheduler and Slack poller are in-process cron jobs with no cross-instance lock, so a second replica would double-send). Set every variable from `.env.example` as a service variable in the dashboard; `.env` is gitignored and never deployed. Railway injects `PORT` itself. If a build still lands on an older Node, add `NIXPACKS_NODE_VERSION=22`.
 
 ---
 

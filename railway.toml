@@ -1,0 +1,25 @@
+# Railway deployment config.
+#
+# Runtime version: @supabase/supabase-js requires Node 22+ (it uses the native
+# WebSocket global; on Node 20 createClient throws at import time). Nixpacks
+# picks the version up from .nvmrc and package.json "engines", both pinned to
+# 22. If a build still lands on an older Node, set NIXPACKS_NODE_VERSION=22 as
+# a service variable in the dashboard.
+#
+# Secrets are NOT in this file — set them as service variables in the Railway
+# dashboard (see .env.example for the full list). Never commit .env.
+
+[build]
+builder = "nixpacks"
+# Only rebuild when something that affects the running service changes.
+watchPatterns = ["src/**", "scripts/**", "package.json", "package-lock.json"]
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+# The task scheduler and the Slack poller are in-process cron jobs and there is
+# no cross-instance lock, so a second replica would double-send.
+numReplicas = 1
