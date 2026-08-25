@@ -32,6 +32,19 @@ function _cfg(key, dflt) {
   return v === null || v === undefined || v === '' ? dflt : v;
 }
 
+/**
+ * Log to BOTH sinks: Logger.log shows in the editor's Execution log pane,
+ * console.log shows in Apps Script → Executions (expand the row) and in Cloud
+ * logs — which is the only place trigger runs leave a trace.
+ */
+function log_(msg) {
+  var args = Array.prototype.slice.call(arguments);
+  var line = args.length > 1 ? Utilities.formatString.apply(null, args) : String(msg);
+  Logger.log(line);
+  console.log(line);
+  return line;
+}
+
 /** Create the installable onFormSubmit trigger. Run once. */
 function installTrigger() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -44,7 +57,7 @@ function installTrigger() {
     .onFormSubmit()
     .create();
   ensureEventColumn_();
-  Logger.log('Trigger installed and Event Name column ensured.');
+  log_('Trigger installed and Event Name column ensured.');
 }
 
 /** Ensure the responses sheet has an "Event Name" column; returns its index. */
@@ -101,28 +114,129 @@ function onFormSubmit(e) {
   answers[EVENT_COLUMN_HEADER] = eventName;
 
   // 3) POST to backend.
-  var backend = _cfg('BACKEND_URL', '');
-  if (!backend) {
-    Logger.log('BACKEND_URL not set — skipping POST. Row stamped with "%s".', eventName);
-    return;
-  }
-
-  var payload = {
+  postLead_({
     external_id: 'row-' + row + '-' + (e && e.values ? e.values[0] : new Date().toISOString()),
     event_name: eventName,
     answers: answers,
-  };
+  });
+}
 
-  try {
-    var res = UrlFetchApp.fetch(backend.replace(/\/$/, '') + '/leads', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'x-ingest-token': _cfg('INGEST_TOKEN', '') },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true,
-    });
-    Logger.log('Backend responded %s: %s', res.getResponseCode(), res.getContentText());
-  } catch (err) {
-    Logger.log('POST to backend failed: %s', err);
+/**
+ * POST one lead to the backend. Throws on a non-2xx reply or a transport error
+ * so the run shows up red in Apps Script → Executions instead of failing quietly.
+ */
+function postLead_(payload) {
+  var backend = _cfg('BACKEND_URL', '');
+  if (!backend) {
+    log_('BACKEND_URL not set — skipping POST.');
+    return;
   }
+
+  var url = backend.replace(/\/$/, '') + '/leads';
+  log_('POST %s', url);
+
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-ingest-token': _cfg('INGEST_TOKEN', '') },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: true,
+  });
+
+  var code = res.getResponseCode();
+  var body = res.getContentText();
+  log_('Backend responded %s: %s', code, body);
+  if (code < 200 || code >= 300) {
+    throw new Error('Backend returned ' + code + ': ' + body);
+  }
+  return body;
+}
+
+/**
+ * Run this by hand from the editor to test the backend hop on its own, with no
+ * form submission involved. A lead should appear in Supabase and the Day-0
+ * WhatsApp + email should fire.
+ */
+function testPost() {
+  var stamp = new Date().toISOString();
+  postLead_({
+    external_id: 'manual-test-' + stamp,
+    event_name: currentEventName_() || 'Manual Test',
+    answers: {
+      'Student Name': 'Test Student',
+      'Student Email': 'test@example.com',
+      'Parent Name': 'Test Parent',
+      'Parent Email': 'test@example.com',
+      'Parent Phone Number': '+910000000000',
+    },
+  });
+}
+
+/**
+ * Run this by hand to see why submissions are not reaching the backend. It
+ * checks the four things that actually go wrong, in the order they go wrong.
+ *
+ * Output lands in three places: the editor's Execution log pane, the expanded
+ * row in Apps Script → Executions, and — if anything failed — the error message
+ * on the Executions row itself, so a red run tells you what broke without
+ * opening anything.
+ */
+function diagnose() {
+  var fails = [];
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    log_('FAIL: no active spreadsheet — this script is not bound to the responses SHEET.');
+    log_('Fix: open the responses spreadsheet → Extensions → Apps Script, and put this code there.');
+    throw new Error('Not bound to a spreadsheet — paste this code into the responses sheet\'s Apps Script project.');
+  }
+  log_('Spreadsheet: %s', ss.getName());
+
+  var sheet = ss.getSheets()[0];
+  log_('First sheet: "%s", rows: %s', sheet.getName(), sheet.getLastRow());
+  var formUrl = sheet.getFormUrl();
+  log_('Linked form: %s', formUrl || 'NONE');
+  if (!formUrl) fails.push('first sheet has no linked form');
+
+  var triggers = ScriptApp.getProjectTriggers().filter(function (t) {
+    return t.getHandlerFunction() === 'onFormSubmit';
+  });
+  if (!triggers.length) {
+    log_('FAIL: no onFormSubmit trigger installed — the script never runs on submit.');
+    log_('Fix: run installTrigger() once and authorise it.');
+    fails.push('no onFormSubmit trigger — run installTrigger()');
+  } else {
+    log_('OK: %s onFormSubmit trigger(s) installed.', triggers.length);
+  }
+
+  var backend = _cfg('BACKEND_URL', '');
+  log_('BACKEND_URL: %s', backend || '(not set)');
+  if (!backend) fails.push('BACKEND_URL script property is not set');
+  if (backend && backend.indexOf('localhost') !== -1) {
+    fails.push('BACKEND_URL points at localhost — Apps Script runs on Google servers and cannot reach it');
+  }
+  log_('INGEST_TOKEN set: %s', _cfg('INGEST_TOKEN', '') ? 'yes' : 'NO');
+  log_('Event name from form title: "%s"', currentEventName_());
+
+  if (backend) {
+    try {
+      var res = UrlFetchApp.fetch(backend.replace(/\/$/, '') + '/health', {
+        muteHttpExceptions: true,
+      });
+      var code = res.getResponseCode();
+      log_('GET /health -> %s: %s', code, res.getContentText());
+      if (code < 200 || code >= 300) fails.push('backend /health returned ' + code);
+    } catch (err) {
+      log_('FAIL: backend unreachable from Apps Script: %s', err);
+      fails.push('backend unreachable: ' + err);
+    }
+  }
+
+  if (fails.length) {
+    var summary = fails.length + ' problem(s): ' + fails.join(' | ');
+    log_('DIAGNOSE FAILED — %s', summary);
+    throw new Error(summary);
+  }
+  log_('DIAGNOSE: all checks passed. If submissions still miss the DB, submit the form and check Executions for the onFormSubmit run.');
 }

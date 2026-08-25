@@ -33,6 +33,7 @@ export async function sendWhatsApp(toPhone, msg) {
   // Dry-run when Twilio isn't wired up yet.
   if (!client) {
     logger.info('[DRY-RUN] WhatsApp', {
+      from: toWhatsApp(config.twilio.whatsappFrom),
       to,
       contentSid: msg.contentSid || null,
       preview: msg.body?.slice(0, 80),
@@ -40,7 +41,12 @@ export async function sendWhatsApp(toPhone, msg) {
     return { dryRun: true };
   }
 
-  const params = { from: config.twilio.whatsappFrom, to };
+  // Normalise the sender too: Twilio rejects the pair with "Invalid From and To
+  // pair" (21910) if one side carries the whatsapp: prefix and the other doesn't.
+  const from = toWhatsApp(config.twilio.whatsappFrom);
+  if (!from) throw new Error('TWILIO_WHATSAPP_FROM is not set');
+
+  const params = { from, to };
 
   // Prefer an approved Content template (required for business-initiated msgs).
   const hasTemplate = msg.contentSid && !msg.contentSid.includes('<');

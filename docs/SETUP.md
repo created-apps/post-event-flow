@@ -59,6 +59,17 @@ The form's questions should capture the standard intake fields (student/parent n
 
 Now every submission stamps the event name into the sheet and POSTs to `/leads`.
 
+### Rows land in the sheet but not in the database
+
+Rows in the sheet prove nothing about the script — **Google Forms writes them itself**, no Apps Script involved. Work through it in this order:
+
+1. **Is the Event Name column filled on the new row?** If it is blank, the script never ran: the trigger is missing (run `installTrigger`), or its authorisation was revoked, or this code is not bound to the responses spreadsheet.
+2. **Run `diagnose()`** from the editor. It reports the bound spreadsheet, the linked form, whether an `onFormSubmit` trigger exists, the script properties, and a live `GET /health` against `BACKEND_URL`. It throws on any problem, so a red row in Executions shows the reason inline; the full report is in the editor's **Execution log** pane and inside the expanded Executions row. The Executions *list* only shows "Execution started / completed" — expand the row to see log output.
+3. **Run `testPost()`** to exercise the backend hop alone, with no form submission. A lead should appear in Supabase.
+4. **Apps Script → Executions** lists every trigger run. No rows there = the trigger is not firing. Rows marked *Failed* carry the backend's status code and body.
+
+Common causes: `BACKEND_URL` pointing at `localhost` (Apps Script runs on Google's servers and cannot reach your laptop — it needs the public host); the backend being down, so the POST gets a 502; `installTrigger` never run; or the script living in a standalone project instead of one bound to the responses sheet.
+
 ---
 
 ## 3. Gemini (event-name extraction)
